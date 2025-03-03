@@ -1,4 +1,3 @@
-// app/api/search/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -9,6 +8,15 @@ const pinecone = new Pinecone({
 const index = pinecone.Index("candidates");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+interface CandidateMetadata {
+  name?: string;
+  email?: string;
+  linkedin?: string;
+  resumeText?: string;
+  skills?: string;
+  experience?: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { jobDescription } = await req.json();
@@ -16,9 +24,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Job description is required" }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const embeddingResult = await model.generateContent(`Summarize: ${jobDescription}`);
-    const jobEmbedding = Array(384).fill(0).map((_, i) => i / 384); // Mock embedding
+    // Use a text generation model for scoring
+    const textModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    // Use an embedding model for vector generation
+    const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    const embeddingResult = await embeddingModel.embedContent(`Summarize: ${jobDescription}`);
+    const jobEmbedding = embeddingResult.embedding.values || Array(384).fill(0).map((_, i) => i / 384);
 
     const queryResponse = await index.query({
       vector: jobEmbedding,
@@ -28,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     const candidates = await Promise.all(
       queryResponse.matches.map(async (match) => {
-        const metadata = match.metadata as any;
+        const metadata = match.metadata as CandidateMetadata;
         const evalPrompt = `
           Job Description: ${jobDescription}
           Candidate Resume: ${metadata.resumeText || "Not provided"}
@@ -38,7 +50,7 @@ export async function POST(req: NextRequest) {
           Score: [number]
           Feedback: [text]
         `;
-        const evalResult = await model.generateContent(evalPrompt);
+        const evalResult = await textModel.generateContent(evalPrompt);
         const evalText = evalResult.response.text();
         const scoreMatch = evalText.match(/Score: (\d+)/);
         const feedbackMatch = evalText.match(/Feedback: (.+)/);

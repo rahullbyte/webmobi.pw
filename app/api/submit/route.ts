@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
           console.error("PDF parsing error:", errData);
           reject(errData);
         });
-        pdfParser.on("pdfParser_dataReady", (pdfData) => {
+        pdfParser.on("pdfParser_dataReady", () => {
           const text = pdfParser.getRawTextContent();
           console.log("Extracted resume text:", text);
           resolve(text);

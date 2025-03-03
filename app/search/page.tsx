@@ -1,11 +1,19 @@
-// app/search/page.tsx
 "use client"
 
 import { useState } from "react";
 
+// Define the Candidate interface matching the API response
+interface Candidate {
+  name: string;
+  email: string;
+  linkedin: string;
+  score: number;
+  feedback: string;
+}
+
 export default function Search() {
   const [jobDescription, setJobDescription] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Candidate[]>([]); // Replace any[] with Candidate[]
 
   const handleSearch = async () => {
     const response = await fetch("/api/search", {
